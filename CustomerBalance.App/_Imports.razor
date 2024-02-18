@@ -1,0 +1,23 @@
+﻿@using System.Net.Http
+@using System.Net.Http.Json
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.Components.Web.Virtualization
+@using Microsoft.AspNetCore.Components.WebAssembly.Http
+@using Microsoft.JSInterop
+@using CustomerBalance.App
+@using CustomerBalance.App.Layout
+@using CustomerBalance.Server.Models
+@using MudBlazor
+@inject NavigationManager Navigation
+@inject HttpClient HttpClient
+@using Newtonsoft.Json
+@using CustomerBalance.Core.ViewModels
+@inject ISnackbar Snackbar
+@using CustomerBalance.App.Components
+@inject IDialogService DialogService
+@inject IJSRuntime JSRuntime
+@using Syncfusion.Blazor;
+@using Syncfusion.Blazor.SfPdfViewer;

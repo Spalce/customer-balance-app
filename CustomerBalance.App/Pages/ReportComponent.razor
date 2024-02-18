@@ -1,0 +1,296 @@
+@page "/report"
+@using CustomerBalance.App.Services
+@using CustomerBalance.Core.Shared
+
+<MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">Reports</MudText>
+<MudGrid>
+    <MudItem xs="12" sm="12">
+        <MudCard Elevation="25" Class="pa-4">
+            <MudForm @ref="_form" @bind-IsValid="@_success" @bind-Errors="@_errors" ValidationDelay="100">
+                <MudGrid Class="pa-0">
+
+                    <MudItem Class="pa-1" xs="12" sm="6" md="3">
+                        <MudSelect T="TransactionType" Label="Method" @bind-Value="Method" Clearable Margin="Margin.Dense">
+                            @foreach (var item in Enum.GetValues<TransactionType>())
+                            {
+                            <MudSelectItem Value="@item">@item</MudSelectItem>
+                            }
+                        </MudSelect>
+                    </MudItem>
+
+                    <MudItem Class="pa-1" xs="12" sm="6" md="5">
+                        <MudAutocomplete T="string" Label="Customer" @bind-Value="_selectedCust" SearchFunc="@SearchCust" Immediate="true"
+                                         AdornmentIcon="@Icons.Material.Filled.Search" AdornmentColor="Color.Primary" Clearable
+                                         ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true" Margin="Margin.Dense">
+                            <MoreItemsTemplate>
+                                <MudText Align="Align.Center" Class="px-4 py-1">
+                                    Showing first 10
+                                </MudText>
+                            </MoreItemsTemplate>
+                        </MudAutocomplete>
+                    </MudItem>
+
+                    <MudItem Class="pa-1" xs="12" sm="6" md="2">
+                        <MudDatePicker Label="Start Date" Editable="true" @bind-Date="Model.StartDate" DateFormat="dd/MM/yyyy"
+                                       Placeholder="Start Date" Margin="Margin.Dense" Mask="@(new DateMask("dd/MM/yyyy"))"
+                                       DisableToolbar="true" Clearable />
+                    </MudItem>
+                    <MudItem Class="pa-1" xs="12" sm="6" md="2">
+                        <MudDatePicker Label="End date" Editable="true" @bind-Date="Model.EndDate" DateFormat="dd/MM/yyyy"
+                                       Placeholder="End Date" Margin="Margin.Dense" Mask="@(new DateMask("dd/MM/yyyy"))"
+                                       DisableToolbar="true" Clearable />
+                    </MudItem>
+
+                </MudGrid>
+                <div class="d-flex align-center justify-space-between">
+                    @*<MudCheckBox T="bool" Required="true" RequiredError="You must agree" Label="I agree!"  />*@
+                    <MudButton Disabled="@(!_form.IsValid || _loading)" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Class="ml-auto mt-4" OnClick="LoadReport">
+                        @if (_loading)
+                        {
+                            <MudProgressCircular Color="Color.Secondary" Size="Size.Small" Indeterminate="true" />
+                        }
+                        else
+                        {
+                        <span>Load</span>
+                        }
+                    </MudButton>
+                </div>
+            </MudForm>
+        </MudCard>
+    </MudItem>
+    <MudItem xs="12" sm="12">
+        <MudCard Elevation="25">
+            <SfPdfViewer2 DocumentPath="@DocumentPath" PrintMode="PrintMode.Default" Height="950px" Width="100%"></SfPdfViewer2>
+        </MudCard>
+    </MudItem>
+</MudGrid>
+
+@code {
+    bool _loading;
+    bool _success;
+    private List<string> _messages = new();
+    string[] _errors = { };
+    MudForm _form;
+    string _selectedCust;
+
+    private ReportModel Model = new();
+    public string? DocumentPath { get; set; }
+    public string? Report { get; set; }
+
+    public TransactionType Method { get; set; }
+    private List<Dictionary<Guid?, string>> CustList { get; set; } = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        GetRecords();
+    }
+
+    private string GetDate()
+    {
+        if (Model.StartDate != null && Model.EndDate != null)
+        {
+            return $" From {Model.StartDate.Value:dd/MM/yyyy} To {Model.EndDate.Value:dd/MM/yyyy}";
+        }
+        else if (Model.StartDate == null && Model.EndDate != null)
+        {
+            return $" From Start To {Model.EndDate.Value:dd/MM/yyyy}";
+        }
+        else if (Model.StartDate != null && Model.EndDate == null)
+        {
+            return $" From {Model.StartDate.Value:dd/MM/yyyy} To Today";
+        }
+        else
+        {
+            return null;
+        }
+    }
+
+    private async void GetRecords()
+    {
+        try
+        {
+            HttpResponseMessage response = await HttpClient.GetAsync("api/customer");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var read = await response.Content.ReadAsStringAsync();
+                var message = JsonConvert.DeserializeObject<Response<IEnumerable<Customer>>>(read);
+                if (message!.Success)
+                    CustList = message?.Data!
+                        .OrderBy(e => e.FirstName)
+                        .Select(e => new Dictionary<Guid?, string> { { e.Id!, e.GetFullName()! } })
+                        .ToList();
+            }
+            else
+            {
+                Snackbar.Add("Server Error: Something went wrong", Severity.Error);
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("An error occurred. Please try again", Severity.Error);
+        }
+    }
+
+    async void LoadReport()
+    {
+        try
+        {
+            DocumentPath = String.Empty;
+            var result = await QueryRecords();
+            if (result.Success)
+            {
+                var model = new ReportDataModel
+                    {
+                        Title = "Transaction Report",
+                        Query = "All Transactions " + GetDate(),
+                        Margin = new SetMargin
+                        { Top = 0, Down = 0, Right = 0, Left = 0, IsLandscape = true, IsSameMargin = true, Width = 0, Margin = 10 },
+                        Document = GlobalHelper.GetDocument("Transaction Report", "Transaction Report"),
+                        Company = GlobalHelper.GetCompany().Data
+                    };
+
+                MemoryStream stream = null!;
+
+                var list = new List<FinanceModel>();
+
+                list.AddRange(result.Data!.Select(e => new FinanceModel
+                {
+                    Remarks = e.Remarks,
+                    Number = e.Number,
+                    Amount = e.Amount,
+                    Type = GlobalHelper.GetTransactionName(e.Type),
+                    Customer = e.Customer?.GetFullName(),
+                    Date = e.Date != null! ? e.Date.Value.ToString("dd/MM/yyyy hh:mm:ss tt") : null
+                }));
+
+                if (list.Count > 0)
+                {
+                    var credit = list.Where(e => e.Type == "Payment").Sum(e => e.Amount);
+                    var debit = list.Where(e => e.Type == "Invoice").Sum(e => e.Amount);
+                    var balance = credit - debit;
+                    list.Add(new FinanceModel
+                    {
+                        Amount = credit,
+                        Customer = "Total Payments"
+                    });
+
+                    list.Add(new FinanceModel
+                    {
+                        Amount = debit,
+                        Customer = "Total Invoices"
+                    });
+
+                    list.Add(new FinanceModel
+                    {
+                        Amount = balance,
+                        Customer = "Balance"
+                    });
+                }
+
+                var data = new ReportDataActual<List<FinanceModel>>
+                    { Details = list, Count = list.Count };
+
+                stream = ReportService.FinanceReport(model, data);
+
+                byte[] byteArray = stream.ToArray();
+                string base64String = Convert.ToBase64String(byteArray);
+                DocumentPath = "data:application/pdf;base64," + base64String;
+
+                StateHasChanged();
+            }
+            else
+            {
+                Snackbar.Add("There is no report for the selected query", Severity.Warning);
+            }
+        }
+        catch (Exception)
+        {
+            _loading = false;
+            Snackbar.Add("There was error loading records", Severity.Error);
+        }
+    }
+
+    private async Task<Response<IEnumerable<Transaction>>> QueryRecords()
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(_selectedCust))
+            {
+                var selectedItem = CustList.FirstOrDefault(dict => dict.Values.Contains(_selectedCust));
+                Model.CustomerId = selectedItem != null! ? selectedItem.Keys.FirstOrDefault() : null;
+            }
+
+            var model = new ReportModel
+            {
+                StartDate = Model.StartDate.HasValue ? Model.StartDate!.Value.Date : null,
+                EndDate = Model.EndDate.HasValue ? Model.EndDate!.Value.Date : null,
+                CustomerId = Model.CustomerId
+            };
+
+            HttpResponseMessage response = await HttpClient.PostAsJsonAsync("api/get-transaction", model);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var read = await response.Content.ReadAsStringAsync();
+                var message = JsonConvert.DeserializeObject<Response<IEnumerable<Transaction>>>(read);
+                return message;
+            }
+            else
+            {
+                Snackbar.Add("Server Error: Something went wrong", Severity.Error);
+                return new Response<IEnumerable<Transaction>>
+                {
+                    Message = "Server Error: Something went wrong",
+                    Success = false
+                };
+            }
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("There was error loading records", Severity.Error);
+            return new Response<IEnumerable<Transaction>>
+            {
+                Message = "There was error loading records",
+                Success = false
+            };
+        }
+    }
+
+    private IEnumerable<Transaction> FilterRecords(IEnumerable<Transaction> list)
+    {
+        if (list.Any())
+        {
+            switch (Report)
+            {
+                case "All":
+                    return list;
+                case "Payments":
+                    return list.Where(e => e.Type == TransactionType.Credit);
+                case "Invoices":
+                    return list.Where(e => e.Type == TransactionType.Debit);
+            }
+        }
+        else
+        {
+            return list;
+        }
+
+        return list;
+    }
+
+    private async Task<IEnumerable<string>> SearchCust(string value)
+    {
+        // if text is null or empty, show the complete list of values
+        if (string.IsNullOrEmpty(value))
+            return CustList.SelectMany(dict => dict.Values);
+
+        return CustList
+            .SelectMany(dict => dict.Values)
+            .Where(dictValue => dictValue.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+    }
+
+}

@@ -1,0 +1,131 @@
+﻿@using CustomerBalance.Core.Shared
+@implements IDisposable
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.body1">
+            <MudIcon Color="Color.Primary" Icon="@(Model.Id != Guid.Empty ? Icons.Material.Filled.Edit : Icons.Material.Filled.Add)" Class="mr-3 mb-n1" />
+            @((Model.Id != null ? "Edit" : "Add") + " Customer")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_success" @bind-Errors="@_errors" ValidationDelay="100">
+            <MudGrid Class="pa-0">
+
+                <MudItem Class="pa-1" xs="6">
+                    <MudTextField T="string" @bind-Value="Model.FirstName" Label="First Name" Margin="Margin.Dense" Immediate
+                                  Required RequiredError="First name is required!" InputType="InputType.Text" />
+                </MudItem>
+
+                <MudItem Class="pa-1" xs="6">
+                    <MudTextField T="string" @bind-Value="Model.LastName" Label="Last Name" Margin="Margin.Dense" Immediate
+                                  Required RequiredError="Last name is required!" InputType="InputType.Text" />
+                </MudItem>
+
+                <MudItem Class="pa-1" xs="8">
+                    <MudTextField T="string" @bind-Value="Model.Email" Label="Email" Margin="Margin.Dense" Immediate
+                                  Required RequiredError="Email is required!" InputType="InputType.Text" />
+                </MudItem>
+
+                <MudItem Class="pa-1" xs="4">
+                    <MudTextField T="string" @bind-Value="Model.PhoneNumber" Label="Contact" Margin="Margin.Dense" Immediate
+                                  Required RequiredError="Contact is required!" InputType="InputType.Text" />
+                </MudItem>
+
+                <MudItem Class="pa-1" xs="12" sm="12">
+                    <MudTextField T="string" @bind-Value="Model.Description" Margin="Margin.Dense" Label="Description"
+                                  Immediate Placeholder="Description" Lines="3"  />
+                </MudItem>
+
+                @if (Model.Id != null)
+                {
+                    <MudItem Class="pa-1" xs="12" sm="6">
+                        <MudCheckBox T="bool" @bind-Value="Model.IsActive" Label="Active"
+                                 LabelPosition="LabelPosition.End" Color="Color.Primary" Dense="true" />
+                    </MudItem>
+                }
+
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudIconButton Variant="Variant.Outlined" Color="Color.Secondary" Title="Cancel"
+                       Size="@Size.Small" Icon="@Icons.Material.Outlined.Cancel" OnClick="Cancel" />
+        <MudIconButton Variant="Variant.Filled" Color="Color.Success" Disabled="_loading"
+                       Size="@Size.Small" Icon="@Icons.Material.Filled.Save" OnClick="SaveRecord" Title="Save" />
+    </DialogActions>
+</MudDialog>
+
+@code {
+    bool _loading;
+    bool _success;
+    string[] _errors = { };
+    MudForm _form;
+
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public Customer Model { get; set; } = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+    }
+
+    public void Dispose()
+    {
+
+    }
+
+    private void Cancel()
+    {
+        Dispose();
+
+        MudDialog.Cancel();
+    }
+
+    private async void SaveRecord()
+    {
+        try
+        {
+            if (!Model.Id.HasValue)
+            {
+                Model.Id = Guid.NewGuid();
+                Model.Number = GlobalHelper.GenerateRandomString(10);
+                Model.IsActive = true;
+                HttpResponseMessage response = await HttpClient.PostAsJsonAsync("api/customer", Model);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var read = await response.Content.ReadAsStringAsync();
+                    var message = JsonConvert.DeserializeObject<Response<Customer>>(read);
+                    Snackbar.Add(message!.Message, message.Success ? Severity.Success : Severity.Error);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    Snackbar.Add("Server error. Please try again", Severity.Error);
+                }
+            }
+            else
+            {
+                HttpResponseMessage response = await HttpClient.PutAsJsonAsync($"api/customer/{Model.Id}", Model);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var read = await response.Content.ReadAsStringAsync();
+                    var message = JsonConvert.DeserializeObject<Response<bool>>(read);
+                    Snackbar.Add(message!.Message, message.Success ? Severity.Success : Severity.Error);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    Snackbar.Add("Server error. Please try again", Severity.Error);
+                }
+            }
+        }
+        catch (Exception e)
+        {
+            Snackbar.Add("An error occurred. Please try again", Severity.Error);
+        }
+    }
+}

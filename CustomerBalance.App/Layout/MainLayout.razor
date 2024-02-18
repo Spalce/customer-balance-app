@@ -1,0 +1,115 @@
+﻿@inherits LayoutComponentBase
+@using CustomerBalance.App.Theme
+@using MudBlazor.ThemeManager
+@implements IDisposable
+
+<MudThemeProvider @bind-IsDarkMode="@_isDarkMode" Theme="_themeManager.Theme" DefaultScrollbar="true" />
+<MudDialogProvider FullWidth="true"
+                   MaxWidth="MaxWidth.Small"
+                   CloseButton="true"
+                   DisableBackdropClick="true"
+                   NoHeader="false"
+                   Position="DialogPosition.Center"
+                   CloseOnEscapeKey="true" />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="5" Dense="true" Color="Color.Info">
+        <MudIconButton Icon="@Icons.Material.Outlined.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
+        <MudHidden Breakpoint="Breakpoint.Xs">
+            <MudText Typo="Typo.h6" Class="ml-4">Customer Balance App</MudText>
+        </MudHidden>
+        <MudSpacer/>
+        @*<MudMenu AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.BottomRight" Dense="true" Class="mt-1 ml-4">
+            <ActivatorContent>
+                <MudAvatar Size="Size.Medium" Elevation="2">
+                    <MudImage Src="None yet" Alt="employee image" Elevation="2" Fluid="true"></MudImage>
+                </MudAvatar>
+            </ActivatorContent>
+            <ChildContent>
+                <PersonCard Name="User Name" Image="None yet" Class="mt-n2" />
+                <MudDivider Class="mb-2" />
+                <MudListItem Text="Password" Icon="@Icons.Material.Outlined.Person" Href="@("/change-password")" />
+                <MudListItem Text="Logout" OnClick="Logout" Icon="@Icons.Material.Outlined.Login" />
+            </ChildContent>
+        </MudMenu>*@
+    </MudAppBar>
+    <MudDrawer @bind-Open="@_drawerOpen" Fixed="true" Variant="@DrawerVariant.Responsive"
+               OpenMiniOnHover="true" ClipMode="DrawerClipMode.Docked" Elevation="5">
+        <NavMenu/>
+    </MudDrawer>
+    <MudMainContent>
+        <MudContainer MaxWidth="MaxWidth.False" Class="mt-4">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    bool _drawerOpen = true;
+    private readonly MudTheme _theme = new();
+    private string ModeIcon => _isDarkMode ? Icons.Material.Filled.DarkMode : Icons.Material.Filled.LightMode;
+    private bool _isDarkMode;
+    private ThemeManagerTheme _themeManager = new();
+    private bool _themeManagerOpen;
+    // public UserDetail User { get; set; } = new();
+    private DotNetObjectReference<MainLayout> _objRef;
+
+    void OpenThemeManager(bool value)
+    {
+        _themeManagerOpen = value;
+    }
+
+    void ToggleDarkMode()
+    {
+        _isDarkMode = !_isDarkMode;
+
+        StateHasChanged();
+    }
+
+    void UpdateTheme(ThemeManagerTheme value)
+    {
+        _themeManager = value;
+        StateHasChanged();
+    }
+
+    /*public void Logout()
+    {
+        Navigation.NavigateTo("/login", true, true);
+    }*/
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await base.OnInitializedAsync();
+
+            _themeManager.Theme = new MudBlazorAdminDashboard();
+            _themeManager.DrawerClipMode = DrawerClipMode.Always;
+            _themeManager.FontFamily = "Montserrat";
+            _themeManager.DefaultBorderRadius = 3;
+
+        }
+        catch (Exception e)
+        {
+            // Snackbar.Add(e.Message, Severity.Error);
+        }
+
+    }
+
+    void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private List<BreadcrumbItem> _items = new List<BreadcrumbItem>
+    {
+        new BreadcrumbItem("Personal", href: "#"),
+        new BreadcrumbItem("Dashboard", href: "#"),
+    };
+
+    public void Dispose()
+    {
+        _objRef?.Dispose();
+    }
+}

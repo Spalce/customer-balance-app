@@ -1,0 +1,201 @@
+﻿@using CustomerBalance.Core.Shared
+@implements IDisposable
+
+<MudDialog>
+    <TitleContent>
+        <MudText Typo="Typo.body1">
+            <MudIcon Color="Color.Primary" Icon="@(Model.Id != Guid.Empty ? Icons.Material.Filled.Edit : Icons.Material.Filled.Add)" Class="mr-3 mb-n1" />
+            @((Model.Id != null ? "Edit" : "Add") + " Transaction")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_success" @bind-Errors="@_errors" ValidationDelay="100">
+            <MudGrid Class="pa-0">
+
+                <MudItem Class="pa-1" xs="12" sm="4">
+                    <MudDatePicker Label="Date" Editable="true" @bind-Date="Model.Date" DateFormat="dd/MM/yyyy"
+                                   Placeholder="Date" Margin="Margin.Dense" Mask="@(new DateMask("dd/MM/yyyy"))"
+                                   DisableToolbar="true"/>
+                </MudItem>
+
+                <MudItem Class="pa-1" xs="12" sm="8">
+                    <MudAutocomplete T="string" Label="Customer" @bind-Value="_selected" SearchFunc="@SearchCustomer" Clearable
+                                     Validation="@(new Func<string, IEnumerable<string>>(ValidateCustomer))" Immediate="true"
+                                     AdornmentIcon="@Icons.Material.Filled.Search" AdornmentColor="Color.Primary" Required
+                                     ResetValueOnEmptyText="true" CoerceText="true" CoerceValue="true" Margin="Margin.Dense">
+                        <MoreItemsTemplate>
+                            <MudText Align="Align.Center" Class="px-4 py-1">
+                                Showing first 10
+                            </MudText>
+                        </MoreItemsTemplate>
+                    </MudAutocomplete>
+                </MudItem>
+
+                <MudItem Class="pa-1" xs="12" sm="6">
+                    <MudNumericField T="decimal" @bind-Value="Model.Amount" Label="Amount" Min="0" Margin="Margin.Dense"
+                                     Immediate Required RequiredError="Value is required"/>
+                </MudItem>
+
+                <MudItem Class="pa-1" xs="12" sm="6">
+                    <MudSelect T="TransactionType" Label="Select Type" @bind-Value="Model.Type"
+                               Immediate Required RequiredError="You must select a type" Margin="Margin.Dense">
+                        @foreach (var item in Enum.GetValues<TransactionType>())
+                        {
+                        <MudSelectItem Value="@item">@GlobalHelper.GetTransactionName(item)</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+
+                <MudItem Class="pa-1" xs="12" sm="12">
+                    <MudTextField T="string" @bind-Value="Model.Remarks" Margin="Margin.Dense" Label="Remarks"
+                                  Required RequiredError="Remarks is required" Immediate Placeholder="Remarks" Lines="3"  />
+                </MudItem>
+
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudIconButton Variant="Variant.Outlined" Color="Color.Secondary" Title="Cancel"
+                       Size="@Size.Small" Icon="@Icons.Material.Outlined.Cancel" OnClick="Cancel"/>
+        <MudIconButton Variant="Variant.Filled" Color="Color.Success" Disabled="_loading"
+                       Size="@Size.Small" Icon="@Icons.Material.Filled.Save" OnClick="SaveRecord" Title="Save"/>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    bool _loading;
+    bool _success;
+    string[] _errors = { };
+    MudForm _form;
+    string _selected;
+
+    [CascadingParameter] MudDialogInstance MudDialog { get; set; }
+
+    [Parameter] public Transaction Model { get; set; } = new();
+    private List<Dictionary<Guid?, string>> ItemList { get; set; } = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await base.OnInitializedAsync();
+        GetRecords();
+        Model.Date = DateTime.Now;
+    }
+
+    private async void GetRecords()
+    {
+        try
+        {
+            HttpResponseMessage response = await HttpClient.GetAsync("api/customer");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var read = await response.Content.ReadAsStringAsync();
+                var message = JsonConvert.DeserializeObject<Response<IEnumerable<Customer>>>(read);
+                if (message!.Success)
+                    ItemList = message?.Data!
+                        .OrderBy(e => e.FirstName)
+                        .Select(e => new Dictionary<Guid?, string> { { e.Id!, e.GetFullName()! } })
+                        .ToList();
+            }
+            else
+            {
+                Snackbar.Add("Server Error: Something went wrong", Severity.Error);
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("An error occurred. Please try again", Severity.Error);
+        }
+    }
+
+    public void Dispose()
+    {
+
+    }
+
+    private void Cancel()
+    {
+        Dispose();
+
+        MudDialog.Cancel();
+    }
+
+    private async void SaveRecord()
+    {
+        try
+        {
+            if (!Model.Id.HasValue)
+            {
+                Model.Id = Guid.NewGuid();
+                if (Model.Type == TransactionType.Credit)
+                    Model.Number = GlobalHelper.GeneratePaymentReference();
+                else if (Model.Type == TransactionType.Debit)
+                    Model.Number = GlobalHelper.GenerateInvoiceReference();
+                Model.IsActive = true;
+                if (!string.IsNullOrEmpty(_selected))
+                {
+                    var selectedItem = ItemList.FirstOrDefault(dict => dict.Values.Contains(_selected));
+                    Model.CustomerId = selectedItem != null! ? selectedItem.Keys.FirstOrDefault() : null;
+                }
+
+                HttpResponseMessage response = await HttpClient.PostAsJsonAsync("api/transaction", Model);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var read = await response.Content.ReadAsStringAsync();
+                    var message = JsonConvert.DeserializeObject<Response<Transaction>>(read);
+                    Snackbar.Add(message!.Message, message.Success ? Severity.Success : Severity.Error);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    Snackbar.Add("Server error. Please try again", Severity.Error);
+                }
+            }
+            else
+            {
+                /*HttpResponseMessage response = await HttpClient.PutAsJsonAsync($"api/transaction/{Model.Id}", Model);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var read = await response.Content.ReadAsStringAsync();
+                    var message = JsonConvert.DeserializeObject<Response<bool>>(read);
+                    Snackbar.Add(message!.Message, message.Success ? Severity.Success : Severity.Error);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    Snackbar.Add("Server error. Please try again", Severity.Error);
+                }*/
+            }
+        }
+        catch (Exception e)
+        {
+            Snackbar.Add("An error occurred. Please try again", Severity.Error);
+        }
+    }
+
+    private async Task<IEnumerable<string>> SearchCustomer(string value)
+    {
+        // if text is null or empty, show the complete list of values
+        if (string.IsNullOrEmpty(value))
+            return ItemList.SelectMany(dict => dict.Values);
+
+        return ItemList
+            .SelectMany(dict => dict.Values)
+            .Where(dictValue => dictValue.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+    }
+
+    private IEnumerable<string> ValidateCustomer(string value)
+    {
+        if (!string.IsNullOrEmpty(value))
+        {
+            if (ItemList.All(dict => dict.Values.All(dictValue => dictValue != value)))
+            {
+                yield return "This is an incorrect value";
+            }
+        }
+    }
+}

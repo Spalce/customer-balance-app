@@ -1,0 +1,107 @@
+@page "/customer"
+
+<MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">Customers</MudText>
+<MudTable T="Customer" Items="_records" Hover="true" Dense="true" Striped="true" Bordered="true" Class="mb-4"
+          RowsPerPage="20" Breakpoint="Breakpoint.None" HorizontalScrollbar="true" Elevation="4" FixedHeader="true"
+          Filter="new Func<Customer, bool>(FilterFunc1)">
+    <ToolBarContent>
+        <MudIconButton Variant="Variant.Outlined" Color="Color.Success" Title="Add New"
+                       Size="@Size.Medium" Icon="@Icons.Material.Outlined.Add" OnClick="@(() => EditRecord(new Customer()))" />
+        <MudSpacer />
+        <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start" Immediate="true"
+                      AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+    </ToolBarContent>
+    <ColGroup>
+        <col />
+        <col />
+        <col />
+        <col style="width: 80px;" />
+        <col style="width: 100px;" />
+    </ColGroup>
+    <HeaderContent>
+        <MudTh>Date</MudTh>
+        <MudTh>Customer</MudTh>
+        <MudTh>Description</MudTh>
+        <MudTh>Active</MudTh>
+        <MudTh>Actions</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Name">@context.GetFullName()</MudTd>
+        <MudTd DataLabel="Contact">@context.PhoneNumber</MudTd>
+        <MudTd DataLabel="Description">@context.Description</MudTd>
+        <MudTd DataLabel="Active">
+            <MudCheckBox Color="Color.Primary" @bind-Value="@context.IsActive" ReadOnly />
+        </MudTd>
+        <MudTd DataLabel="Actions">
+            <MudIconButton Color="Color.Secondary" Size="@Size.Small" Icon="@Icons.Material.Filled.Edit" OnClick="@(() => EditRecord(context))"/>
+        </MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager />
+    </PagerContent>
+</MudTable>
+
+@code {
+    private List<Customer> _records = new();
+    private string _searchString = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        GetRecords();
+        await base.OnInitializedAsync();
+    }
+
+    private async void GetRecords()
+    {
+        try
+        {
+            HttpResponseMessage response = await HttpClient.GetAsync("api/customer");
+
+            if (response.IsSuccessStatusCode)
+            {
+                var read = await response.Content.ReadAsStringAsync();
+                var message = JsonConvert.DeserializeObject<Response<IEnumerable<Customer>>>(read);
+                // Snackbar.Add(message!.Message, message.Success ? Severity.Success : Severity.Error);
+                _records = message?.Data!.OrderBy(e => e.FirstName).ToList();
+            }
+            else
+            {
+                Snackbar.Add("Server Error: Something went wrong", Severity.Error);
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("An error occurred. Please try again", Severity.Error);
+        }
+    }
+
+    async Task EditRecord(Customer item)
+    {
+        var parameters = new DialogParameters { ["Model"] = item };
+
+        var dialog = await DialogService.ShowAsync<CustomerDialog>("Edit Record", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            GetRecords();
+        }
+    }
+
+    private bool FilterFunc1(Customer element) => FilterFunc(element, _searchString);
+    private bool FilterFunc(Customer x, string _searchString)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString))
+            return true;
+
+        if (!string.IsNullOrEmpty(x.GetFullName()) && x.GetFullName()!.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (!string.IsNullOrEmpty(x.Description) && x.Description.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return false;
+    }
+}

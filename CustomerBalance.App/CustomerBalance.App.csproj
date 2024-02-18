@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <WasmNativeStrip>true</WasmNativeStrip>
+        <WasmBuildNative>true</WasmBuildNative>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="8.0.2"/>
+        <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="8.0.2" PrivateAssets="all"/>
+        <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Authentication" Version="8.0.2"/>
+        <PackageReference Include="MudBlazor" Version="6.14.0" />
+        <PackageReference Include="MudBlazor.ThemeManager" Version="1.0.8" />
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+        <PackageReference Include="Syncfusion.Blazor.SfPdfViewer" Version="24.2.6" />
+        <PackageReference Include="SkiaSharp.Views.Blazor" Version="2.88.7" />
+        <PackageReference Include="Syncfusion.Pdf.Net.Core" Version="24.2.6" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <ProjectReference Include="..\CustomerBalance.Core\CustomerBalance.Core.csproj" />
+      <ProjectReference Include="..\CustomerBalance.Server\CustomerBalance.Server.csproj" />
+      <NativeFileReference Include="$(SkiaSharpStaticLibraryPath)\2.0.23\*.a" />
+    </ItemGroup>
+
+</Project>

@@ -1,0 +1,118 @@
+@page "/transaction"
+
+<MudText Typo="Typo.h5" Color="Color.Primary" Class="mb-4">Transactions</MudText>
+<MudTable T="Transaction" Items="_records" Hover="true" Dense="true" Striped="true" Bordered="true" Class="mb-4"
+          RowsPerPage="20" Breakpoint="Breakpoint.None" HorizontalScrollbar="true" Elevation="4" FixedHeader="true"
+          Filter="new Func<Transaction, bool>(FilterFunc1)">
+    <ToolBarContent>
+        <MudIconButton Variant="Variant.Outlined" Color="Color.Success" Title="Add New"
+                       Size="@Size.Medium" Icon="@Icons.Material.Outlined.Add" OnClick="@(() => EditRecord(new Transaction()))" />
+        <MudSpacer />
+        <MudTextField @bind-Value="_searchString" Placeholder="Search" Adornment="Adornment.Start" Immediate="true"
+                      AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+    </ToolBarContent>
+    <ColGroup>
+        <col style="width: 200px;" />
+        <col />
+        <col />
+        <col />
+        <col />
+        <col style="width: 80px;" />
+    </ColGroup>
+    <HeaderContent>
+        <MudTh><MudTableSortLabel SortBy="new Func<Transaction, object>(x=>x.Date)">Date</MudTableSortLabel></MudTh>
+        <MudTh>Customer</MudTh>
+        <MudTh>Description</MudTh>
+        <MudTh>Amount</MudTh>
+        <MudTh>Type</MudTh>
+        <MudTh>Active</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="Date">@context.Date!.Value.ToString("dd/MM/yyyy hh:mm:ss tt")</MudTd>
+        <MudTd DataLabel="Customer">@context.Customer?.GetFullName()</MudTd>
+        <MudTd DataLabel="Description">@context.Remarks</MudTd>
+        <MudTd DataLabel="Amount">@context.Amount</MudTd>
+        <MudTd DataLabel="Type">@context.Type</MudTd>
+        <MudTd DataLabel="Active">
+            <MudCheckBox Color="Color.Primary" @bind-Value="@context.IsActive" ReadOnly />
+        </MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager />
+    </PagerContent>
+</MudTable>
+
+@code {
+    private List<Transaction> _records = new();
+    private string _searchString = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        GetRecords();
+        await base.OnInitializedAsync();
+    }
+
+    private async void GetRecords()
+    {
+        try
+        {
+            var model = new ReportModel
+            {
+                StartDate = DateTime.Today.Date,
+                EndDate = DateTime.Today.Date,
+                CustomerId = null
+            };
+
+            HttpResponseMessage response = await HttpClient.PostAsJsonAsync("api/get-transaction", model);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var read = await response.Content.ReadAsStringAsync();
+                var message = JsonConvert.DeserializeObject<Response<IEnumerable<Transaction>>>(read);
+                // Snackbar.Add(message!.Message, message.Success ? Severity.Success : Severity.Error);
+                _records = message?.Data!.OrderByDescending(e => e.Date).ToList();
+            }
+            else
+            {
+                Snackbar.Add("Server Error: Something went wrong", Severity.Error);
+            }
+
+            StateHasChanged();
+        }
+        catch (Exception)
+        {
+            Snackbar.Add("An error occurred. Please try again", Severity.Error);
+        }
+    }
+
+    async Task EditRecord(Transaction item)
+    {
+        var parameters = new DialogParameters { ["Model"] = item };
+
+        var dialog = await DialogService.ShowAsync<TransactionDialog>("Edit Record", parameters);
+        var result = await dialog.Result;
+
+        if (!result.Canceled)
+        {
+            GetRecords();
+        }
+    }
+
+    private bool FilterFunc1(Transaction element) => FilterFunc(element, _searchString);
+    private bool FilterFunc(Transaction x, string _searchString)
+    {
+        if (string.IsNullOrWhiteSpace(_searchString))
+            return true;
+
+        if (!string.IsNullOrEmpty(x.Customer!.GetFullName()) && x.Customer.GetFullName()!.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (!string.IsNullOrEmpty(x.Remarks) && x.Remarks!.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (!string.IsNullOrEmpty(x.Date.ToString()) && x.Date.ToString()!.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return false;
+    }
+}
