@@ -23,12 +23,12 @@ builder.Services.AddMemoryCache();
 builder.Services.AddScoped<HttpClient>();
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri("https://localhost:7265") });
 
-builder.Services.AddOidcAuthentication(options =>
+/*builder.Services.AddOidcAuthentication(options =>
 {
     // Configure your authentication provider options here.
     // For more information, see https://aka.ms/blazor-standalone-auth
     builder.Configuration.Bind("Local", options.ProviderOptions);
-});
+});*/
 // Add Syncfusion Blazor service to the container.
 builder.Services.AddSyncfusionBlazor();
 Syncfusion.Licensing.SyncfusionLicenseProvider.RegisterLicense(
